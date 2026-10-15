@@ -70,7 +70,7 @@ go run ./cmd/server
 - `quay-darwin-amd64.tar.gz`
 - `quay-darwin-arm64.tar.gz`
 
-每个包里是对应系统的 `quay` 可执行文件，以及已经构建好的 `web/dist`。在 Actions 的运行记录里下载，解压后进入该目录执行：
+每个包里是对应系统的 `quay` 可执行文件，以及已经构建好的 `web/dist`。打包成功后会发到 [Releases](https://github.com/flydmonkey/Quay/releases)，标签是 `build-` 加上提交号前 7 位。解压后进入该目录执行：
 
 ```bash
 ./quay
