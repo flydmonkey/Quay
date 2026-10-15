@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 
+	"webadmin/internal/auth"
 	"webadmin/internal/db"
 	"webadmin/internal/fs"
 	"webadmin/internal/mongo"
@@ -19,6 +20,17 @@ import (
 )
 
 func main() {
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
+	srv := &http.Server{Addr: ":" + port, Handler: newHandler(auth.LoadConfig())}
+	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		log.Fatalf("server start failed: %v", err)
+	}
+}
+
+func newHandler(cfg auth.Config) http.Handler {
 	r := gin.Default()
 
 	// 基础健康检查
@@ -28,8 +40,11 @@ func main() {
 		})
 	})
 
-	// 预留 API 分组
 	api := r.Group("/api")
+	api.Use(cfg.Middleware())
+	api.POST("/login", cfg.Login)
+	api.POST("/logout", cfg.Logout)
+	api.GET("/auth/me", cfg.Me)
 	{
 		api.GET("/info", func(c *gin.Context) {
 			c.JSON(http.StatusOK, gin.H{
@@ -90,6 +105,13 @@ func main() {
 	wrapped := http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		if strings.EqualFold(req.Header.Get("Upgrade"), "websocket") {
 			switch req.URL.Path {
+			case "/api/terminal", "/api/vnc/ws":
+				if !cfg.Authenticated(req) {
+					auth.WriteUnauthorized(w)
+					return
+				}
+			}
+			switch req.URL.Path {
 			case "/api/terminal":
 				terminal.HandlerRaw(w, req)
 				return
@@ -114,13 +136,5 @@ func main() {
 		})
 	}
 
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "8080"
-	}
-
-	srv := &http.Server{Addr: ":" + port, Handler: wrapped}
-	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-		log.Fatalf("server start failed: %v", err)
-	}
+	return wrapped
 }

@@ -97,10 +97,13 @@
 
 <script setup lang="ts">
 import { ref, computed, reactive, onMounted, onUnmounted, watch, nextTick } from "vue";
+import { useRouter } from "vue-router";
+import { redirectIfLoggedOut } from "../session";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import "@xterm/xterm/css/xterm.css";
 
+const router = useRouter();
 const terminalContainer = ref<HTMLElement | null>(null);
 
 interface SshHost {
@@ -328,6 +331,7 @@ function addTab() {
   term.loadAddon(fitAddon);
 
   const ws = new WebSocket(getWsUrl(hostId || undefined));
+  let opened = false;
   const tab = reactive<TabState>({
     id,
     name,
@@ -341,6 +345,7 @@ function addTab() {
   });
 
   ws.onopen = () => {
+    opened = true;
     tab.status = "connected";
     tab.statusText = "已连接";
     if (tab.id === activeId.value) nextTick(() => fitTab(tab));
@@ -349,6 +354,7 @@ function addTab() {
   ws.onclose = () => {
     tab.status = "closed";
     tab.statusText = "连接已关闭";
+    if (!opened) void redirectIfLoggedOut(router);
   };
 
   ws.onerror = () => {

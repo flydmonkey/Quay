@@ -1,8 +1,10 @@
 import { createRouter, createWebHistory } from "vue-router";
+import { refreshSession } from "../session";
 
 const router = createRouter({
   history: createWebHistory("/"),
   routes: [
+    { path: "/login", name: "Login", component: () => import("../views/Login.vue") },
     { path: "/", name: "Home", component: () => import("../views/Home.vue") },
     {
       path: "/terminal",
@@ -40,6 +42,15 @@ const router = createRouter({
       component: () => import("../views/Vnc.vue"),
     },
   ],
+});
+
+router.beforeEach(async (to) => {
+  const ok = await refreshSession();
+  if (to.path === "/login") {
+    return ok ? "/" : true;
+  }
+  if (!ok) return "/login";
+  return true;
 });
 
 export default router;

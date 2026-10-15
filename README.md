@@ -2,6 +2,8 @@
 
 Quay（码头）是一套跑在浏览器里的个人运维台。本机和远程主机都靠在同一处：终端、文件、SQL、MongoDB、Redis，以及 VNC 远程桌面。
 
+打开页面后需要登录。没有设置账号时，用户名和密码都是 `admin`。
+
 Go 模块名仍是 `webadmin`，页面和接口里的产品名是 Quay。
 
 ## 功能
@@ -59,12 +61,32 @@ go run ./cmd/server
 
 `web/dist` 存在时，同一进程会托管页面。打开 <http://localhost:8080>。
 
+## 打包
+
+推送到 `main`，或在 GitHub 的 Actions 页手动运行 **Package**，会跑测试并打出四个压缩包：
+
+- `quay-linux-amd64.tar.gz`
+- `quay-linux-arm64.tar.gz`
+- `quay-darwin-amd64.tar.gz`
+- `quay-darwin-arm64.tar.gz`
+
+每个包里是对应系统的 `quay` 可执行文件，以及已经构建好的 `web/dist`。在 Actions 的运行记录里下载，解压后进入该目录执行：
+
+```bash
+./quay
+```
+
+程序从当前目录读取 `web/dist`，所以要在解压出来的目录里启动。默认监听 `8080`。
+
 ## 配置
 
 | 变量 | 作用 | 默认 |
 | --- | --- | --- |
 | `PORT` | HTTP 监听端口 | `8080` |
 | `APP_ENV` | 仅在 `GET /api/info` 中回显 | 空 |
+| `QUAY_USER` | 登录用户名 | `admin` |
+| `QUAY_PASSWORD` | 登录密码 | `admin` |
+| `QUAY_SESSION_SECRET` | 会话 Cookie 的签名密钥。更换或留空重启后需要重新登录 | 启动时随机生成 |
 | `WEBADMIN_FS_ROOT` | 本机文件管理允许访问的根目录 | 进程当前工作目录 |
 | `SHELL` | 本地终端使用的 shell | `/bin/sh` |
 
@@ -86,11 +108,14 @@ go run ./cmd/server
 
 ## 接口一览
 
-除健康检查外，业务接口都在 `/api` 下。
+除健康检查、登录和退出外，业务接口都在 `/api` 下，并且需要登录。
 
 | 路径 | 说明 |
 | --- | --- |
-| `GET /api/health` | 健康检查 |
+| `GET /api/health` | 健康检查，不需要登录 |
+| `POST /api/login` | 登录。请求 JSON：`{"username","password"}` |
+| `POST /api/logout` | 退出并清除会话 Cookie |
+| `GET /api/auth/me` | 当前登录用户，未登录返回 401 |
 | `GET /api/info` | 应用名与环境 |
 | `/api/fs/*` | 本机文件 |
 | `/api/ssh/hosts` | SSH 主机的增删查 |
@@ -107,6 +132,7 @@ go run ./cmd/server
 
 ```
 cmd/server/          入口
+internal/auth/       登录与会话 Cookie
 internal/terminal/   本地 PTY 与 SSH 终端
 internal/fs/         本机文件
 internal/ssh/        SSH 主机与连接
@@ -121,4 +147,8 @@ data/                运行时连接配置
 
 ## 安全
 
-Quay 没有登录和鉴权。任意能访问该端口的人都可以打开本机 shell、读写 `WEBADMIN_FS_ROOT`、使用已保存的主机和数据库凭据。请只在本机或受信任的网络里运行，并限制监听地址与端口。
+除健康检查、登录、退出和登录页所需的静态文件外，页面和接口都要先登录。会话放在名为 `quay_session` 的 HttpOnly Cookie 里，有效期 7 天。
+
+没有设置 `QUAY_USER` 和 `QUAY_PASSWORD` 时，账号是 `admin` / `admin`。在别人能访问到的机器上，启动前请改掉这两个值，并设置 `QUAY_SESSION_SECRET`。
+
+登录只挡住 Quay 自己。已经保存的主机和数据库凭据仍然以明文写在 `data/`。请只在本机或受信任的网络里运行。

@@ -76,6 +76,8 @@
 
 <script setup lang="ts">
 import { ref, watch, nextTick, onBeforeUnmount, onMounted } from 'vue';
+import { useRouter } from 'vue-router';
+import { redirectIfLoggedOut } from '../session';
 
 interface VncConn {
   id: string;
@@ -85,6 +87,7 @@ interface VncConn {
   password?: string;
 }
 
+const router = useRouter();
 const host = ref('');
 const port = ref(5900);
 const password = ref('');
@@ -212,10 +215,12 @@ async function connect() {
       setStatus('已连接');
     });
     rfb.addEventListener('disconnect', () => {
+      const wasConnected = connected.value;
       connected.value = false;
       connecting.value = false;
       rfb = null;
       setStatus('已断开');
+      if (!wasConnected) void redirectIfLoggedOut(router);
     });
     rfb.addEventListener('credentialsrequired', () => {
       setStatus('需要 VNC 密码，请在密码框输入或保存连接时填写', true);
